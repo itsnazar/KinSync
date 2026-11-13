@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with display name and family association.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Unique user ID matching auth.uid" },
+        "displayName": { "type": "string", "description": "Display name of the user" },
+        "email": { "type": "string", "description": "Google email address" },
+        "activeFamilyId": { "type": "string", "description": "ID of the currently active family workspace" },
+        "fcmToken": { "type": "string", "description": "Firebase Cloud Messaging device registration token" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp via serverTimestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp via serverTimestamp" }
+      },
+      "required": ["userId", "displayName", "email", "createdAt"]
+    },
+    "Family": {
+      "title": "Family",
+      "description": "Private family workspace.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Family document ID" },
+        "name": { "type": "string", "description": "Name of the family workspace" },
+        "creatorId": { "type": "string", "description": "User ID of creator" },
+        "joinCode": { "type": "string", "description": "Invite code to join family" },
+        "memberUids": { "type": "array", "description": "List of member user IDs" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["name", "creatorId", "joinCode", "memberUids", "createdAt"]
+    },
+    "FamilyItem": {
+      "title": "FamilyItem",
+      "description": "Shared family item such as note, reminder, calendar event, flight, or travel place.",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string", "description": "Associated family ID" },
+        "memberUids": { "type": "array", "description": "List of authorized family member UIDs" },
+        "authorId": { "type": "string", "description": "Author user ID" },
+        "authorName": { "type": "string", "description": "Author display name" },
+        "itemType": { "type": "string", "description": "Item type: NOTE, REMINDER, EVENT, FLIGHT, PLACE" },
+        "category": { "type": "string", "description": "Category label" },
+        "isEncrypted": { "type": "boolean", "description": "Flag indicating client-side AES-GCM encryption" },
+        "encryptedPayload": { "type": "string", "description": "Ciphertext and IV encoded string" },
+        "title": { "type": "string", "description": "Title or summary" },
+        "content": { "type": "string", "description": "Details or notes" },
+        "eventDateMillis": { "type": "integer", "description": "Scheduled epoch timestamp in millis" },
+        "isCompleted": { "type": "boolean", "description": "Completion state for reminders" },
+        "recurrenceRule": { "type": "string", "description": "Recurrence frequency: NONE, DAILY, WEEKLY, MONTHLY" },
+        "estimatedCost": { "type": "number", "description": "Optional trip or item budget cost" },
+        "attachmentEncryptedBase64": { "type": "string", "description": "Encrypted WebP micro-attachment payload" },
+        "flightNumber": { "type": "string", "description": "Flight identifier e.g. UA123" },
+        "flightDeparture": { "type": "string", "description": "Departure city or airport" },
+        "flightArrival": { "type": "string", "description": "Arrival city or airport" },
+        "flightStatus": { "type": "string", "description": "Status of flight" },
+        "placeName": { "type": "string", "description": "Destination or POI name" },
+        "placeAddress": { "type": "string", "description": "Destination address" },
+        "placeGeoQuery": { "type": "string", "description": "Maps query string" },
+        "shareToken": { "type": "string", "description": "Unique token for link sharing" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["familyId", "memberUids", "authorId", "itemType", "category", "isEncrypted", "createdAt"]
+    },
+    "ShareLink": {
+      "title": "ShareLink",
+      "description": "Publicly accessible secure view for an item shared with specific contacts.",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "description": "Secure link token" },
+        "title": { "type": "string", "description": "Public title" },
+        "summary": { "type": "string", "description": "Summary or decrypted content intended for link" },
+        "itemType": { "type": "string", "description": "Item type" },
+        "createdById": { "type": "string", "description": "User ID of creator" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["token", "title", "itemType", "createdById", "createdAt"]
+    },
+    "PushEvent": {
+      "title": "PushEvent",
+      "description": "FCM push notification trigger queued when a family member adds a note or calendar event.",
+      "type": "object",
+      "properties": {
+        "familyId": { "type": "string", "description": "Associated family ID" },
+        "topic": { "type": "string", "description": "FCM topic name e.g. family_<familyId>" },
+        "memberUids": { "type": "array", "description": "List of authorized family member UIDs" },
+        "authorId": { "type": "string", "description": "Sender user ID" },
+        "authorName": { "type": "string", "description": "Sender display name" },
+        "itemType": { "type": "string", "description": "Item type: NOTE, EVENT, REMINDER, FLIGHT, PLACE" },
+        "title": { "type": "string", "description": "Notification title or encrypted label" },
+        "isEncrypted": { "type": "boolean", "description": "Whether body is redacted for E2EE privacy" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["familyId", "topic", "memberUids", "authorId", "itemType", "title", "isEncrypted", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document keyed by auth.uid."
+    },
+    "/families/{familyId}": {
+      "schema": "Family",
+      "description": "Family workspace with member UIDs."
+    },
+    "/families/{familyId}/items/{itemId}": {
+      "schema": "FamilyItem",
+      "description": "Shared items belonging to a family."
+    },
+    "/families/{familyId}/push_events/{eventId}": {
+      "schema": "PushEvent",
+      "description": "FCM notification dispatch queue for family events and notes."
+    },
+    "/share_links/{token}": {
+      "schema": "ShareLink",
+      "description": "Public secure share links for contacts."
+    }
+  }
+}

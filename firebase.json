@@ -1,0 +1,21 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-android-kinsync-6bd4f710-19cc-4ba7-95e7-81fbed8b1e31",
+      "rules": "firestore.rules"
+    }
+  ],
+  "emulators": {
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8085
+    },
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9099
+    },
+    "ui": {
+      "enabled": false
+    }
+  }
+}

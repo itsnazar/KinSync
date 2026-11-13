@@ -1,0 +1,6 @@
+{
+  "name": "PodAlly",
+  "description": "Private encrypted family hub for shared notes, reminders, social calendar, travel planning, flight tracking, and AI insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

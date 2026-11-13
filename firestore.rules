@@ -1,0 +1,199 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() <= 200 &&
+             (!('activeFamilyId' in data) || (data.activeFamilyId is string && data.activeFamilyId.size() <= 128)) &&
+             (!('fcmToken' in data) || (data.fcmToken is string && data.fcmToken.size() <= 512));
+    }
+
+    function isValidFamily(data) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.creatorId is string && data.creatorId.size() <= 128 &&
+             data.joinCode is string && data.joinCode.size() >= 4 && data.joinCode.size() <= 32 &&
+             data.memberUids is list && data.memberUids.size() <= 20 &&
+             (data.memberUids.size() == 0 || data.memberUids[0] is string);
+    }
+
+    function isValidFamilyItem(data) {
+      return data.familyId is string && data.familyId.size() <= 128 &&
+             data.memberUids is list && data.memberUids.size() <= 20 &&
+             (data.memberUids.size() == 0 || data.memberUids[0] is string) &&
+             data.authorId is string && data.authorId.size() <= 128 &&
+             (!('authorName' in data) || (data.authorName is string && data.authorName.size() <= 100)) &&
+             data.itemType is string && data.itemType in ['NOTE', 'REMINDER', 'EVENT', 'FLIGHT', 'PLACE'] &&
+             data.category is string && data.category in ['GENERAL', 'SCHOOL', 'CHORES', 'MEDICAL', 'TRAVEL', 'CELEBRATION', 'HOME'] &&
+             data.isEncrypted is bool &&
+             (!('encryptedPayload' in data) || (data.encryptedPayload is string && data.encryptedPayload.size() <= 100000)) &&
+             (!('title' in data) || (data.title is string && data.title.size() <= 500)) &&
+             (!('content' in data) || (data.content is string && data.content.size() <= 50000)) &&
+             (!('eventDateMillis' in data) || (data.eventDateMillis is int)) &&
+             (!('isCompleted' in data) || (data.isCompleted is bool)) &&
+             (!('recurrenceRule' in data) || (data.recurrenceRule is string && data.recurrenceRule in ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'])) &&
+             (!('estimatedCost' in data) || (data.estimatedCost is number && data.estimatedCost >= 0)) &&
+             (!('attachmentEncryptedBase64' in data) || (data.attachmentEncryptedBase64 is string && data.attachmentEncryptedBase64.size() <= 160000)) &&
+             (!('flightNumber' in data) || (data.flightNumber is string && data.flightNumber.size() <= 50)) &&
+             (!('flightDeparture' in data) || (data.flightDeparture is string && data.flightDeparture.size() <= 100)) &&
+             (!('flightArrival' in data) || (data.flightArrival is string && data.flightArrival.size() <= 100)) &&
+             (!('flightStatus' in data) || (data.flightStatus is string && data.flightStatus.size() <= 50)) &&
+             (!('placeName' in data) || (data.placeName is string && data.placeName.size() <= 200)) &&
+             (!('placeAddress' in data) || (data.placeAddress is string && data.placeAddress.size() <= 300)) &&
+             (!('placeGeoQuery' in data) || (data.placeGeoQuery is string && data.placeGeoQuery.size() <= 300)) &&
+             (!('shareToken' in data) || (data.shareToken is string && data.shareToken.size() <= 128));
+    }
+
+    function isValidShareLink(data) {
+      return data.token is string && data.token.size() <= 128 &&
+             data.title is string && data.title.size() <= 500 &&
+             (!('summary' in data) || (data.summary is string && data.summary.size() <= 20000)) &&
+             data.itemType is string && data.itemType.size() <= 50 &&
+             data.createdById is string && data.createdById.size() <= 128;
+    }
+
+    // 1. User Profiles
+    match /users/{userId} {
+      allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'activeFamilyId', 'fcmToken', 'updatedAt']);
+
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // 2. Families
+    match /families/{familyId} {
+      allow get, list: if isSignedIn() && (request.auth.uid in resource.data.memberUids);
+
+      allow create: if isSignedIn() &&
+                       isValidId(familyId) &&
+                       incoming().creatorId == request.auth.uid &&
+                       (request.auth.uid in incoming().memberUids) &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       isValidFamily(incoming());
+
+      allow update: if isSignedIn() &&
+                       (request.auth.uid in existing().memberUids || (request.auth.uid in incoming().memberUids && incoming().joinCode == existing().joinCode)) &&
+                       incoming().creatorId == existing().creatorId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidFamily(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'joinCode', 'memberUids', 'updatedAt']);
+
+      allow delete: if isSignedIn() && existing().creatorId == request.auth.uid;
+
+      // 3. Nested Family Items
+      match /items/{itemId} {
+        allow get, list: if isSignedIn() && (request.auth.uid in resource.data.memberUids);
+
+        allow create: if isSignedIn() &&
+                         isValidId(itemId) &&
+                         (request.auth.uid in incoming().memberUids) &&
+                         incoming().authorId == request.auth.uid &&
+                         incoming().familyId == familyId &&
+                         incoming().createdAt is timestamp &&
+                         incoming().createdAt <= request.time &&
+                         isValidFamilyItem(incoming());
+
+        allow update: if isSignedIn() &&
+                         (request.auth.uid in existing().memberUids) &&
+                         incoming().familyId == existing().familyId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidFamilyItem(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'memberUids', 'authorName', 'category', 'isEncrypted',
+                           'encryptedPayload', 'title', 'content', 'eventDateMillis',
+                           'isCompleted', 'recurrenceRule', 'estimatedCost',
+                           'attachmentEncryptedBase64', 'flightNumber', 'flightDeparture',
+                           'flightArrival', 'flightStatus', 'placeName',
+                           'placeAddress', 'placeGeoQuery', 'shareToken', 'updatedAt'
+                         ]);
+
+        allow delete: if isSignedIn() && (request.auth.uid in existing().memberUids);
+      }
+
+      // 4. Push Notification Events Queue (for FCM fan-out)
+      match /push_events/{eventId} {
+        allow get, list: if isSignedIn() && (request.auth.uid in resource.data.memberUids);
+
+        allow create: if isSignedIn() &&
+                         isValidId(eventId) &&
+                         (request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.memberUids) &&
+                         incoming().keys().hasAll([
+                           'familyId', 'topic', 'memberUids', 'authorId',
+                           'itemType', 'title', 'isEncrypted', 'createdAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'familyId', 'topic', 'memberUids', 'authorId',
+                           'authorName', 'itemType', 'title', 'isEncrypted', 'createdAt'
+                         ]) &&
+                         incoming().memberUids is list &&
+                         incoming().memberUids.size() <= 20 &&
+                         (request.auth.uid in incoming().memberUids) &&
+                         incoming().authorId == request.auth.uid &&
+                         incoming().familyId == familyId &&
+                         (!('authorName' in incoming()) || (incoming().authorName is string && incoming().authorName.size() <= 100)) &&
+                         incoming().topic is string && incoming().topic.size() <= 160 &&
+                         incoming().itemType is string && incoming().itemType in ['NOTE', 'REMINDER', 'EVENT', 'FLIGHT', 'PLACE'] &&
+                         incoming().title is string && incoming().title.size() <= 250 &&
+                         incoming().isEncrypted is bool &&
+                         incoming().createdAt is timestamp &&
+                         incoming().createdAt <= request.time;
+
+        allow update, delete: if false;
+      }
+    }
+
+    // 4. Secure Share Links
+    match /share_links/{token} {
+      allow get: if isValidId(token);
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isValidId(token) &&
+                       incoming().token == token &&
+                       incoming().createdById == request.auth.uid &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       isValidShareLink(incoming());
+
+      allow update: if false;
+      allow delete: if isSignedIn() && existing().createdById == request.auth.uid;
+    }
+  }
+}
